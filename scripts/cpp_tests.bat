@@ -12,7 +12,7 @@ if errorlevel 1 goto :error
 
 cmake --build %BUILD_DIR% ^
       --config %BUILD_TYPE% ^
-      --target mlc_backtrace_static ^
+      --target mlc_backtrace-static ^
       -j %NUMBER_OF_PROCESSORS% ^
       -- -verbosity:detailed
 if errorlevel 1 goto :error
