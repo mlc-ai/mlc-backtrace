@@ -15,5 +15,5 @@ cmake -S . -B ${BUILD_DIR} \
 	-DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 cmake --build ${BUILD_DIR} \
 	--config ${BUILD_TYPE} \
-	--target mlc_backtrace_static \
+	--target mlc_backtrace-static \
 	-j "${NUM_PROCS}"
