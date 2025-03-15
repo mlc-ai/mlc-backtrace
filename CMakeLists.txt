@@ -8,6 +8,26 @@ include(cmake/CPM.cmake)
 include(ExternalProject)
 CPMAddPackage("gh:TheLartians/PackageProject.cmake@1.13.0")
 
+add_library(
+  mlc_backtrace-static STATIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/cpp/traceback_win.cc
+  ${CMAKE_CURRENT_SOURCE_DIR}/cpp/traceback.cc
+)
+target_include_directories(mlc_backtrace-static PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+target_compile_definitions(mlc_backtrace-static PRIVATE MLC_BACKTRACE_EXPORTS)
+set_target_properties(
+  mlc_backtrace-static PROPERTIES
+  POSITION_INDEPENDENT_CODE ON
+  CXX_STANDARD 17
+  CXX_EXTENSIONS OFF
+  CXX_STANDARD_REQUIRED ON
+  CXX_VISIBILITY_PRESET hidden
+  VISIBILITY_INLINES_HIDDEN ON
+)
+
 # Define target `libbacktrace` if not on Windows
 if(NOT WIN32)
   set(_libbacktrace_source ${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/libbacktrace)
@@ -44,40 +64,11 @@ if(NOT WIN32)
   )
   ExternalProject_Add_Step(project_libbacktrace checkout DEPENDERS configure DEPENDEES download)
   set_target_properties(project_libbacktrace PROPERTIES EXCLUDE_FROM_ALL TRUE)
-  add_library(libbacktrace STATIC IMPORTED)
-  add_dependencies(libbacktrace project_libbacktrace)
-  set_target_properties(libbacktrace PROPERTIES
-    IMPORTED_LOCATION ${_libbacktrace_prefix}/lib/libbacktrace.a
-    INTERFACE_INCLUDE_DIRECTORIES ${_libbacktrace_prefix}/include
-  )
+  target_include_directories(mlc_backtrace-static PRIVATE ${_libbacktrace_prefix}/include)
+  add_dependencies(mlc_backtrace-static project_libbacktrace)
 endif()
 
-add_library(
-  mlc_backtrace-static STATIC
-  ${CMAKE_CURRENT_SOURCE_DIR}/cpp/traceback_win.cc
-  ${CMAKE_CURRENT_SOURCE_DIR}/cpp/traceback.cc
-)
-target_include_directories(mlc_backtrace-static PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>
-)
-target_compile_definitions(mlc_backtrace-static PRIVATE MLC_BACKTRACE_EXPORTS)
-target_link_libraries(mlc_backtrace-static PRIVATE libbacktrace)
-set_target_properties(
-  mlc_backtrace-static PROPERTIES
-  POSITION_INDEPENDENT_CODE ON
-  CXX_STANDARD 17
-  CXX_EXTENSIONS OFF
-  CXX_STANDARD_REQUIRED ON
-  CXX_VISIBILITY_PRESET hidden
-  VISIBILITY_INLINES_HIDDEN ON
-  ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
-  LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
-)
-
 if(APPLE)
-  file(WRITE "${CMAKE_BINARY_DIR}/empty_exports.txt" "")
-  target_link_options(mlc_backtrace-static INTERFACE "-Wl,-exported_symbols_list,${CMAKE_BINARY_DIR}/empty_exports.txt")
   # On macOS, use libtool -static to merge the libraries
   execute_process(COMMAND xcrun -sdk ${CMAKE_OSX_SYSROOT} -find libtool
     OUTPUT_VARIABLE _mlc_libtool_val
@@ -87,24 +78,23 @@ if(APPLE)
   set(MLC_LIBTOOL ${_mlc_libtool_val} CACHE FILEPATH "Libtool")
   message(STATUS "Using libtool ${MLC_LIBTOOL}")
   add_custom_command(TARGET mlc_backtrace-static POST_BUILD
-    COMMAND ${MLC_LIBTOOL} -static -o $<TARGET_FILE:mlc_backtrace-static>.tmp $<TARGET_FILE:mlc_backtrace-static> $<TARGET_FILE:libbacktrace>
+    COMMAND ${MLC_LIBTOOL} -static -o $<TARGET_FILE:mlc_backtrace-static>.tmp $<TARGET_FILE:mlc_backtrace-static> ${_libbacktrace_prefix}/lib/libbacktrace.a
     COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:mlc_backtrace-static>.tmp $<TARGET_FILE:mlc_backtrace-static>
     COMMAND ${CMAKE_COMMAND} -E remove $<TARGET_FILE:mlc_backtrace-static>.tmp
-    COMMENT "Merging libbacktrace into libmlc_backtrace-static.a (macOS)..."
+    COMMENT "Merging libbacktrace.a into libmlc_backtrace-static.a (macOS)..."
   )
 elseif(WIN32)
   # On Windows, no merging is performed (libbacktrace not used or not supported)
   # If using MinGW (GNU on Windows) with libbacktrace.a available, you could handle similarly to Linux.
   # message(STATUS "Skipping libbacktrace merge on Windows.")
 else() # Linux and other UNIX (not macOS)
-  target_link_options(mlc_backtrace-static INTERFACE "-Wl,--exclude-libs,ALL")
   # On Linux/Unix, use ar to extract and merge object files
   add_custom_command(TARGET mlc_backtrace-static POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_CURRENT_BINARY_DIR}/backtrace_objs
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/backtrace_objs
-    COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_CURRENT_BINARY_DIR}/backtrace_objs ${CMAKE_AR} x $<TARGET_FILE:libbacktrace>
+    COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_CURRENT_BINARY_DIR}/backtrace_objs ${CMAKE_AR} x ${_libbacktrace_prefix}/lib/libbacktrace.a
     COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_CURRENT_BINARY_DIR}/backtrace_objs ${CMAKE_AR} rcs $<TARGET_FILE:mlc_backtrace-static> "${CMAKE_CURRENT_BINARY_DIR}/backtrace_objs/*.o"
-    COMMENT "Merging libbacktrace into libmlc_backtrace-static.a (Linux/Unix)..."
+    COMMENT "Merging libbacktrace.a into libmlc_backtrace-static.a (Linux/Unix)..."
   )
 endif()
 
