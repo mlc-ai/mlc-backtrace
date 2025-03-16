@@ -27,6 +27,13 @@ set_target_properties(
   CXX_VISIBILITY_PRESET hidden
   VISIBILITY_INLINES_HIDDEN ON
 )
+if(MSVC)
+  set_target_properties(
+    mlc_backtrace-static
+    PROPERTIES
+    MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL"
+  )
+endif()
 
 # Define target `libbacktrace` if not on Windows
 if(NOT WIN32)
