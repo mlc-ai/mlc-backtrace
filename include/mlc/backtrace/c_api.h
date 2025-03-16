@@ -7,11 +7,8 @@
 #define MLC_BACKTRACE_API EMSCRIPTEN_KEEPALIVE
 #endif
 #if !defined(MLC_BACKTRACE_API) && defined(_MSC_VER)
-#ifdef MLC_BACKTRACE_EXPORTS
-#define MLC_BACKTRACE_API __declspec(dllexport)
-#else
-#define MLC_BACKTRACE_API __declspec(dllimport)
-#endif
+// mlc-backtrace is always a static library, which we don't export/import symbols.
+#define MLC_BACKTRACE_API
 #endif
 #ifndef MLC_BACKTRACE_API
 #define MLC_BACKTRACE_API __attribute__((visibility("default")))
